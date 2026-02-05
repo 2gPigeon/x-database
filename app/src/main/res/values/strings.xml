@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">x-database</string>
+    <string name="saving_in_progress">Saving...</string>
+</resources>
