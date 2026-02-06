@@ -18,23 +18,26 @@ import java.time.ZoneOffset
 class MainViewModel(
     private val repository: BookmarkRepository
 ) : ViewModel() {
-    private val startDate = MutableStateFlow<LocalDate?>(null)
-    private val endDate = MutableStateFlow<LocalDate?>(null)
+    enum class PostDateFilter(val label: String) {
+        ALL("All"),
+        YEAR_2024("2024"),
+        YEAR_2025("2025")
+    }
 
-    val selectedStartDate: StateFlow<LocalDate?> = startDate.asStateFlow()
-    val selectedEndDate: StateFlow<LocalDate?> = endDate.asStateFlow()
+    private val selectedFilter = MutableStateFlow(PostDateFilter.ALL)
+    val activeFilter: StateFlow<PostDateFilter> = selectedFilter.asStateFlow()
 
     val bookmarks: StateFlow<List<Bookmark>> = combine(
         repository.observeBookmarks(),
-        startDate,
-        endDate
-    ) { bookmarks, start, end ->
+        selectedFilter
+    ) { bookmarks, filter ->
+        val (start, end) = when (filter) {
+            PostDateFilter.ALL -> null to null
+            PostDateFilter.YEAR_2024 -> LocalDate.of(2024, 1, 1) to LocalDate.of(2024, 12, 31)
+            PostDateFilter.YEAR_2025 -> LocalDate.of(2025, 1, 1) to LocalDate.of(2025, 12, 31)
+        }
         val startMillis = start?.atStartOfDay()?.toInstant(ZoneOffset.UTC)?.toEpochMilli()
-        val endExclusiveMillis = end
-            ?.plusDays(1)
-            ?.atStartOfDay()
-            ?.toInstant(ZoneOffset.UTC)
-            ?.toEpochMilli()
+        val endExclusiveMillis = end?.plusDays(1)?.atStartOfDay()?.toInstant(ZoneOffset.UTC)?.toEpochMilli()
 
         bookmarks.filter { bookmark ->
             val postedAt = bookmark.postedAt ?: return@filter startMillis == null && endExclusiveMillis == null
@@ -48,17 +51,8 @@ class MainViewModel(
         initialValue = emptyList()
     )
 
-    fun setStartDate(date: LocalDate?) {
-        startDate.value = date
-    }
-
-    fun setEndDate(date: LocalDate?) {
-        endDate.value = date
-    }
-
-    fun clearPostedDateFilter() {
-        startDate.value = null
-        endDate.value = null
+    fun setFilter(filter: PostDateFilter) {
+        selectedFilter.value = filter
     }
 
     fun deleteBookmark(bookmark: Bookmark) {
