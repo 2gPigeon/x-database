@@ -30,7 +30,15 @@ class BookmarkRepository(
         deleted
     }
 
-    suspend fun saveSharedImage(uri: Uri, sourceUrl: String? = null, tweetId: Long? = null, postedAt: Long? = null): Long {
+    suspend fun saveSharedImage(
+        uri: Uri,
+        sourceUrl: String? = null,
+        tweetId: Long? = null,
+        postedAt: Long? = null,
+        authorUsername: String? = null
+    ): Long {
+        val normalizedAuthor = authorUsername
+            ?.takeIf { it.isNotBlank() && !it.equals("unknown", ignoreCase = true) }
         val filePath = withContext(Dispatchers.IO) {
             val extension = resolveExtension(context.contentResolver, uri)
             val outFile = createImageFile(context, extension)
@@ -45,6 +53,7 @@ class BookmarkRepository(
         return dao.insert(
             Bookmark(
                 tweetId = tweetId,
+                authorUsername = normalizedAuthor,
                 filePath = filePath,
                 sourceUrl = sourceUrl,
                 savedAt = System.currentTimeMillis(),
@@ -53,7 +62,15 @@ class BookmarkRepository(
         )
     }
 
-    suspend fun downloadAndSaveImage(imageUrl: String, sourceUrl: String? = null, tweetId: Long? = null, postedAt: Long? = null): Long {
+    suspend fun downloadAndSaveImage(
+        imageUrl: String,
+        sourceUrl: String? = null,
+        tweetId: Long? = null,
+        postedAt: Long? = null,
+        authorUsername: String? = null
+    ): Long {
+        val normalizedAuthor = authorUsername
+            ?.takeIf { it.isNotBlank() && !it.equals("unknown", ignoreCase = true) }
         val filePath = withContext(Dispatchers.IO) {
             val targetUrl = normalizeXImageUrl(imageUrl)
             val request = Request.Builder().url(targetUrl).build()
@@ -75,6 +92,7 @@ class BookmarkRepository(
         return dao.insert(
             Bookmark(
                 tweetId = tweetId,
+                authorUsername = normalizedAuthor,
                 filePath = filePath,
                 sourceUrl = sourceUrl,
                 savedAt = System.currentTimeMillis(),
@@ -137,5 +155,44 @@ class BookmarkRepository(
         }
 
         return "jpg"
+    }
+
+    suspend fun refreshUnknownAuthors() = refreshUnknownAuthors { bookmark ->
+        when {
+            bookmark.tweetId != null -> com.example.x_database.web.XAuthorResolver.resolveFromTweetId(bookmark.tweetId)
+            !bookmark.sourceUrl.isNullOrBlank() -> com.example.x_database.web.XUrlResolver.resolveUsernameFromCanonical(bookmark.sourceUrl)
+            else -> null
+        }
+    }
+
+    suspend fun refreshUnknownAuthors(resolve: suspend (Bookmark) -> String?) = withContext(Dispatchers.IO) {
+        val unknown = dao.findUnknownAuthors()
+        unknown.forEach { bookmark ->
+            val resolved = resolve(bookmark)
+            if (!resolved.isNullOrBlank()) {
+                dao.updateAuthorUsername(bookmark.id, resolved)
+            }
+        }
+    }
+
+    suspend fun refreshExpandedSourceUrls(resolve: suspend (Bookmark) -> String?) = withContext(Dispatchers.IO) {
+        val targets = dao.findUnexpandedSourceUrls()
+        targets.forEach { bookmark ->
+            val resolved = resolve(bookmark)
+            if (!resolved.isNullOrBlank() && resolved != bookmark.sourceUrl) {
+                dao.updateSourceUrl(bookmark.id, resolved)
+            }
+        }
+    }
+
+    suspend fun refreshAuthorsFromSourceUrls() = withContext(Dispatchers.IO) {
+        val all = dao.findAll()
+        all.forEach { bookmark ->
+            val url = bookmark.sourceUrl ?: return@forEach
+            val username = com.example.x_database.web.XUrlResolver.extractUsernameFromUrl(url)
+            if (!username.isNullOrBlank() && !username.equals("unknown", ignoreCase = true) && username != bookmark.authorUsername) {
+                dao.updateAuthorUsername(bookmark.id, username)
+            }
+        }
     }
 }

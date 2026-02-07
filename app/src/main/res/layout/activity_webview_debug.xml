@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/webview_debug_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <TextView
+        android:id="@+id/text_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="WebView URL Debug"
+        android:textAppearance="?android:attr/textAppearanceLarge"
+        android:paddingBottom="8dp" />
+
+    <TextView
+        android:id="@+id/text_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Status: Idle"
+        android:textAppearance="?android:attr/textAppearanceSmall" />
+
+    <TextView
+        android:id="@+id/text_current_url"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Current URL:"
+        android:textAppearance="?android:attr/textAppearanceSmall" />
+
+    <TextView
+        android:id="@+id/text_canonical_url"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Canonical URL:"
+        android:textAppearance="?android:attr/textAppearanceSmall" />
+
+    <TextView
+        android:id="@+id/text_location_url"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Location href:"
+        android:textAppearance="?android:attr/textAppearanceSmall" />
+
+    <TextView
+        android:id="@+id/text_og_url"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="OG URL:"
+        android:textAppearance="?android:attr/textAppearanceSmall" />
+
+    <TextView
+        android:id="@+id/text_twitter_creator"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Twitter Creator:"
+        android:textAppearance="?android:attr/textAppearanceSmall"
+        android:paddingBottom="8dp" />
+
+    <EditText
+        android:id="@+id/input_url"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Load URL"
+        android:inputType="textUri"
+        android:text="https://x.com/i/status/"
+        android:singleLine="true" />
+
+    <Button
+        android:id="@+id/btn_load"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Load in WebView"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="8dp" />
+
+    <ProgressBar
+        android:id="@+id/progress_loading"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="gone" />
+
+    <WebView
+        android:id="@+id/webview"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+</LinearLayout>

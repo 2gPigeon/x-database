@@ -5,59 +5,122 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.x_database.data.Bookmark
 import com.example.x_database.data.BookmarkRepository
-import kotlinx.coroutines.flow.MutableStateFlow
+import com.example.x_database.web.XImageScraper
+import com.example.x_database.web.XUrlResolver
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
-import java.time.LocalDate
-import java.time.ZoneOffset
+import kotlinx.coroutines.delay
+import android.content.Context
+import com.example.x_database.util.SaveFailureLogger
 
 class MainViewModel(
     private val repository: BookmarkRepository
 ) : ViewModel() {
-    enum class PostDateFilter(val label: String) {
-        ALL("All"),
-        YEAR_2024("2024"),
-        YEAR_2025("2025")
-    }
-
-    private val selectedFilter = MutableStateFlow(PostDateFilter.ALL)
-    val activeFilter: StateFlow<PostDateFilter> = selectedFilter.asStateFlow()
-
-    val bookmarks: StateFlow<List<Bookmark>> = combine(
-        repository.observeBookmarks(),
-        selectedFilter
-    ) { bookmarks, filter ->
-        val (start, end) = when (filter) {
-            PostDateFilter.ALL -> null to null
-            PostDateFilter.YEAR_2024 -> LocalDate.of(2024, 1, 1) to LocalDate.of(2024, 12, 31)
-            PostDateFilter.YEAR_2025 -> LocalDate.of(2025, 1, 1) to LocalDate.of(2025, 12, 31)
-        }
-        val startMillis = start?.atStartOfDay()?.toInstant(ZoneOffset.UTC)?.toEpochMilli()
-        val endExclusiveMillis = end?.plusDays(1)?.atStartOfDay()?.toInstant(ZoneOffset.UTC)?.toEpochMilli()
-
-        bookmarks.filter { bookmark ->
-            val postedAt = bookmark.postedAt ?: return@filter startMillis == null && endExclusiveMillis == null
-            val matchesStart = startMillis == null || postedAt >= startMillis
-            val matchesEnd = endExclusiveMillis == null || postedAt < endExclusiveMillis
-            matchesStart && matchesEnd
-        }
-    }.stateIn(
+    val bookmarks: StateFlow<List<Bookmark>> = repository.observeBookmarks().stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = emptyList()
     )
 
-    fun setFilter(filter: PostDateFilter) {
-        selectedFilter.value = filter
-    }
-
     fun deleteBookmark(bookmark: Bookmark) {
         viewModelScope.launch {
             repository.deleteBookmark(bookmark)
+        }
+    }
+
+    fun refreshUnknownAuthors() {
+        viewModelScope.launch {
+            repository.refreshUnknownAuthors()
+        }
+    }
+
+    fun refreshUnknownAuthorsWithWebView(context: Context) {
+        viewModelScope.launch {
+            repository.refreshUnknownAuthors { bookmark ->
+                val url = bookmark.sourceUrl ?: bookmark.tweetId?.let { "https://x.com/i/status/$it" } ?: return@refreshUnknownAuthors null
+                val resolved = runCatching {
+                    val result = XImageScraper.extract(context, url)
+                    val canonical = result.canonicalUrl ?: return@runCatching null
+                    XUrlResolver.resolveUsernameFromCanonical(canonical)
+                }.getOrNull()
+                if (!resolved.isNullOrBlank()) {
+                    runCatching {
+                        SaveFailureLogger.appendEvent(
+                            context = context,
+                            intent = android.content.Intent("AUTHOR_REFRESH"),
+                            status = "AUTHOR_REFRESH_OK",
+                            message = resolved,
+                            extra = mapOf("url" to url)
+                        )
+                    }
+                } else {
+                    runCatching {
+                        SaveFailureLogger.appendEvent(
+                            context = context,
+                            intent = android.content.Intent("AUTHOR_REFRESH"),
+                            status = "AUTHOR_REFRESH_FAIL",
+                            message = "Unresolved",
+                            extra = mapOf("url" to url)
+                        )
+                    }
+                }
+                delay(300)
+                resolved
+            }
+        }
+    }
+
+    fun refreshExpandedUrlsWithWebView(context: Context) {
+        viewModelScope.launch {
+            expandUrlsWithWebView(context)
+        }
+    }
+
+    fun refreshAuthorsFromSourceUrls() {
+        viewModelScope.launch {
+            repository.refreshAuthorsFromSourceUrls()
+        }
+    }
+
+    fun syncUrlsAndAuthors(context: Context) {
+        viewModelScope.launch {
+            expandUrlsWithWebView(context)
+            repository.refreshAuthorsFromSourceUrls()
+        }
+    }
+
+    private suspend fun expandUrlsWithWebView(context: Context) {
+        repository.refreshExpandedSourceUrls { bookmark ->
+            val url = bookmark.sourceUrl ?: bookmark.tweetId?.let { "https://x.com/i/status/$it" } ?: return@refreshExpandedSourceUrls null
+            val canonical = runCatching {
+                val result = XImageScraper.extract(context, url)
+                result.canonicalUrl
+            }.getOrNull()?.takeIf { it.isNotBlank() }
+            if (!canonical.isNullOrBlank()) {
+                runCatching {
+                    SaveFailureLogger.appendEvent(
+                        context = context,
+                        intent = android.content.Intent("URL_EXPAND"),
+                        status = "URL_EXPAND_OK",
+                        message = canonical,
+                        extra = mapOf("url" to url)
+                    )
+                }
+            } else {
+                runCatching {
+                    SaveFailureLogger.appendEvent(
+                        context = context,
+                        intent = android.content.Intent("URL_EXPAND"),
+                        status = "URL_EXPAND_FAIL",
+                        message = "Unresolved",
+                        extra = mapOf("url" to url)
+                    )
+                }
+            }
+            delay(300)
+            canonical
         }
     }
 }

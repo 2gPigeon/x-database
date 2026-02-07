@@ -7,6 +7,7 @@ import androidx.room.PrimaryKey
 data class Bookmark(
     @PrimaryKey(autoGenerate = true) val id: Long = 0L,
     val tweetId: Long?,
+    val authorUsername: String?,
     val filePath: String,
     val sourceUrl: String?,
     val savedAt: Long,
