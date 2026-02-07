@@ -4,12 +4,20 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -20,8 +28,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -37,6 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
@@ -70,109 +77,166 @@ class AuthorListActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 private fun AuthorListScreen(bookmarks: List<Bookmark>) {
     val context = LocalContext.current
-    var menuExpanded by remember { mutableStateOf(false) }
+    var drawerOpen by remember { mutableStateOf(false) }
     val grouped = bookmarks
         .groupBy { it.authorUsername?.takeIf { name -> name.isNotBlank() } ?: "Unknown" }
         .map { (author, items) ->
             val sorted = items.sortedByDescending { it.savedAt }
-            AuthorGroup(author, sorted, sorted.take(3))
+            AuthorGroup(author, sorted, sorted.take(2))
         }
-        .sortedBy { it.author.lowercase() }
+        .sortedWith(
+            compareByDescending<AuthorGroup> { it.items.size }
+                .thenBy { it.author.lowercase() }
+        )
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Authors") },
                 navigationIcon = {
-                    androidx.compose.foundation.layout.Box {
-                        IconButton(onClick = { menuExpanded = true }) {
-                            Icon(imageVector = Icons.Default.Menu, contentDescription = "Menu")
-                        }
-                        DropdownMenu(
-                            expanded = menuExpanded,
-                            onDismissRequest = { menuExpanded = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("All images") },
-                                onClick = {
-                                    menuExpanded = false
-                                    context.startActivity(Intent(context, MainActivity::class.java))
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Authors") },
-                                onClick = { menuExpanded = false }
-                            )
-                        }
+                    IconButton(onClick = { drawerOpen = !drawerOpen }) {
+                        Icon(imageVector = Icons.Default.Menu, contentDescription = "Menu")
                     }
                 }
             )
         }
     ) { padding ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
                 .padding(padding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(
-                text = "${grouped.size} users",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(grouped, key = { it.author }) { group ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                context.startActivity(
-                                    Intent(context, AuthorGalleryActivity::class.java)
-                                        .putExtra(AuthorGalleryActivity.EXTRA_AUTHOR, group.author)
-                                )
-                            },
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                    ) {
-                        Column(
+                Text(
+                    text = "${grouped.size} users",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(grouped, key = { it.author }) { group ->
+                        Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Text(
-                                text = group.author,
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Text(
-                                text = "${group.items.size} posts",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                group.previews.forEach { bookmark ->
-                                    AsyncImage(
-                                        model = File(bookmark.filePath),
-                                        contentDescription = bookmark.sourceUrl ?: "preview",
-                                        modifier = Modifier.size(72.dp)
+                                .clickable {
+                                    context.startActivity(
+                                        Intent(context, AuthorGalleryActivity::class.java)
+                                            .putExtra(AuthorGalleryActivity.EXTRA_AUTHOR, group.author)
                                     )
-                                }
-                                if (group.previews.isEmpty()) {
-                                    Spacer(modifier = Modifier.height(72.dp))
+                                },
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = group.author,
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                                Text(
+                                    text = "${group.items.size} posts",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    group.previews.forEach { bookmark ->
+                                        AsyncImage(
+                                            model = File(bookmark.filePath),
+                                            contentDescription = bookmark.sourceUrl ?: "preview",
+                                            modifier = Modifier.size(124.dp)
+                                        )
+                                    }
+                                    if (group.previews.isEmpty()) {
+                                        Spacer(modifier = Modifier.height(124.dp))
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
+
+            AnimatedVisibility(
+                visible = drawerOpen,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color(0x33000000))
+                        .clickable { drawerOpen = false }
+                )
+            }
+
+            AnimatedVisibility(
+                visible = drawerOpen,
+                enter = slideInHorizontally(initialOffsetX = { -it }) + fadeIn(),
+                exit = slideOutHorizontally(targetOffsetX = { -it }) + fadeOut()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(0.5f)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "Navigate",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    DrawerItem(
+                        label = "All images",
+                        selected = false,
+                        onClick = {
+                            drawerOpen = false
+                            context.startActivity(Intent(context, MainActivity::class.java))
+                        }
+                    )
+                    DrawerItem(
+                        label = "Authors",
+                        selected = true,
+                        onClick = { drawerOpen = false }
+                    )
+                }
+            }
         }
     }
+}
+
+@Composable
+private fun DrawerItem(label: String, selected: Boolean, onClick: () -> Unit) {
+    val indicator = if (selected) "▶ " else "  "
+    val base = MaterialTheme.colorScheme.surface
+    Text(
+        text = indicator + label,
+        style = MaterialTheme.typography.bodyMedium,
+        color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                color = if (selected) base else base.copy(alpha = 0.6f),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+    )
 }
 
 private data class AuthorGroup(

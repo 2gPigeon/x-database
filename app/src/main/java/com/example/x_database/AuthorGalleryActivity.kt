@@ -5,6 +5,11 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -13,9 +18,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -26,8 +33,6 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -94,100 +99,135 @@ class AuthorGalleryActivity : ComponentActivity() {
 private fun AuthorGalleryScreen(author: String, bookmarks: List<Bookmark>) {
     var expandedIndex by remember { mutableStateOf<Int?>(null) }
     val context = LocalContext.current
-    var menuExpanded by remember { mutableStateOf(false) }
+    var drawerOpen by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(author) },
                 navigationIcon = {
-                    Box {
-                        IconButton(onClick = { menuExpanded = true }) {
-                            Icon(imageVector = Icons.Default.Menu, contentDescription = "Menu")
-                        }
-                        DropdownMenu(
-                            expanded = menuExpanded,
-                            onDismissRequest = { menuExpanded = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("All images") },
-                                onClick = {
-                                    menuExpanded = false
-                                    context.startActivity(Intent(context, MainActivity::class.java))
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Authors") },
-                                onClick = {
-                                    menuExpanded = false
-                                    context.startActivity(Intent(context, AuthorListActivity::class.java))
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(author) },
-                                onClick = { menuExpanded = false }
-                            )
-                        }
+                    IconButton(onClick = { drawerOpen = !drawerOpen }) {
+                        Icon(imageVector = Icons.Default.Menu, contentDescription = "Menu")
                     }
                 }
             )
         }
     ) { padding ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
                 .padding(padding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(
-                text = "${bookmarks.size} items",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            if (bookmarks.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "No images for this author.",
-                        textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            } else {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    contentPadding = PaddingValues(bottom = 24.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    items(bookmarks, key = { it.id }) { bookmark ->
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(180.dp)
-                                .clickable {
-                                    val index = bookmarks.indexOfFirst { it.id == bookmark.id }
-                                    if (index >= 0) {
-                                        expandedIndex = index
-                                    }
-                                },
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant
-                            )
-                        ) {
-                            AsyncImage(
-                                model = File(bookmark.filePath),
-                                contentDescription = bookmark.sourceUrl ?: "saved image",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "${bookmarks.size} items",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (bookmarks.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "No images for this author.",
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                } else {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
+                        contentPadding = PaddingValues(bottom = 24.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        items(bookmarks, key = { it.id }) { bookmark ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(180.dp)
+                                    .clickable {
+                                        val index = bookmarks.indexOfFirst { it.id == bookmark.id }
+                                        if (index >= 0) {
+                                            expandedIndex = index
+                                        }
+                                    },
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                )
+                            ) {
+                                AsyncImage(
+                                    model = File(bookmark.filePath),
+                                    contentDescription = bookmark.sourceUrl ?: "saved image",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
                         }
                     }
+                }
+            }
+
+            AnimatedVisibility(
+                visible = drawerOpen,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color(0x33000000))
+                        .clickable { drawerOpen = false }
+                )
+            }
+
+            AnimatedVisibility(
+                visible = drawerOpen,
+                enter = slideInHorizontally(initialOffsetX = { -it }) + fadeIn(),
+                exit = slideOutHorizontally(targetOffsetX = { -it }) + fadeOut()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(0.5f)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "Navigate",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    DrawerItem(
+                        label = "All images",
+                        selected = false,
+                        onClick = {
+                            drawerOpen = false
+                            context.startActivity(Intent(context, MainActivity::class.java))
+                        }
+                    )
+                    DrawerItem(
+                        label = "Authors",
+                        selected = false,
+                        onClick = {
+                            drawerOpen = false
+                            context.startActivity(Intent(context, AuthorListActivity::class.java))
+                        }
+                    )
+                    DrawerItem(
+                        label = author,
+                        selected = true,
+                        onClick = { drawerOpen = false }
+                    )
                 }
             }
         }
@@ -225,7 +265,9 @@ private fun AuthorPagerDialog(
             if (bookmarks.isNotEmpty()) {
                 HorizontalPager(
                     state = pagerState,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(bottom = 80.dp)
                 ) { page ->
                     val bookmark = bookmarks[page]
                     AsyncImage(
@@ -238,9 +280,12 @@ private fun AuthorPagerDialog(
             }
             Row(
                 modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 24.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 val total = bookmarks.size
                 val currentIndex = pagerState.currentPage.coerceIn(0, (total - 1).coerceAtLeast(0))
@@ -259,12 +304,30 @@ private fun AuthorPagerDialog(
                 }
                 Text(
                     text = if (total == 0) "0/0" else "${currentIndex + 1}/$total",
-                    color = Color.White,
-                    modifier = Modifier.align(Alignment.CenterVertically)
+                    color = Color.White
                 )
             }
         }
     }
+}
+
+@Composable
+private fun DrawerItem(label: String, selected: Boolean, onClick: () -> Unit) {
+    val indicator = if (selected) "▶ " else "  "
+    val base = MaterialTheme.colorScheme.surface
+    Text(
+        text = indicator + label,
+        style = MaterialTheme.typography.bodyMedium,
+        color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                color = if (selected) base else base.copy(alpha = 0.6f),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+    )
 }
 
 private fun resolveTweetUrl(bookmark: Bookmark): String? {
