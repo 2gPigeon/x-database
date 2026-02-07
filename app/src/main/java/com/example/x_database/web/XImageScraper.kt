@@ -11,20 +11,32 @@ import android.os.Looper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
+import org.json.JSONObject
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.suspendCancellableCoroutine
 
+data class XWebScrapeResult(
+    val imageUrls: List<String>,
+    val canonicalUrl: String?
+)
+
 object XImageScraper {
     @SuppressLint("SetJavaScriptEnabled")
-    suspend fun extractImageUrls(context: Context, tweetUrl: String): List<String> {
+    suspend fun extract(context: Context, tweetUrl: String): XWebScrapeResult {
         return withContext(Dispatchers.Main) {
             suspendCancellableCoroutine { continuation ->
                 val webView = WebView(context)
-                CookieManager.getInstance().setAcceptCookie(true)
+                val cookieManager = CookieManager.getInstance()
+                cookieManager.setAcceptCookie(true)
+                cookieManager.setAcceptThirdPartyCookies(webView, true)
 
                 webView.settings.javaScriptEnabled = true
                 webView.settings.domStorageEnabled = true
+                webView.settings.loadsImagesAutomatically = false
+                webView.settings.blockNetworkImage = true
+                webView.settings.userAgentString =
+                    "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36"
                 webView.webChromeClient = WebChromeClient()
                 webView.webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView?, url: String?) {
@@ -38,26 +50,56 @@ object XImageScraper {
                                     .map(function(source) { return source.src || ''; })
                                     .filter(function(src) { return src.indexOf('pbs.twimg.com/media/') >= 0; })
                                 );
-                              return Array.from(new Set(images));
+                              var canonical = '';
+                              var link = document.querySelector('link[rel=canonical]');
+                              if (link && link.href) { canonical = link.href; }
+                              var og = '';
+                              var meta = document.querySelector('meta[property="og:url"]');
+                              if (meta && meta.content) { og = meta.content; }
+                              var locationHref = '';
+                              if (window.location && window.location.href) { locationHref = window.location.href; }
+                              if (!canonical && og) { canonical = og; }
+                              if (!canonical && locationHref) { canonical = locationHref; }
+                              return JSON.stringify({
+                                images: Array.from(new Set(images)),
+                                canonical: canonical || '',
+                                ogUrl: og || '',
+                                locationUrl: locationHref || ''
+                              });
                             })();
                         """.trimIndent()
 
-                        Handler(Looper.getMainLooper()).postDelayed({
-                            webView.evaluateJavascript(script) { result ->
-                                try {
-                                    val parsed = parseJsonArray(result)
-                                    if (!continuation.isCompleted) {
-                                        continuation.resume(parsed)
+                        val handler = Handler(Looper.getMainLooper())
+                        fun evaluateOnce(fallbackDelayMs: Long, allowRetry: Boolean) {
+                            handler.postDelayed({
+                                webView.evaluateJavascript(script) { result ->
+                                    try {
+                                        val parsed = parseJsonResult(result)
+                                        if (!continuation.isCompleted) {
+                                            if (parsed.canonicalUrl.isNullOrBlank() && allowRetry) {
+                                                evaluateOnce(2000, false)
+                                            } else {
+                                                continuation.resume(parsed)
+                                            }
+                                        }
+                                    } catch (error: Throwable) {
+                                        if (!continuation.isCompleted) {
+                                            if (allowRetry) {
+                                                evaluateOnce(2000, false)
+                                            } else {
+                                                continuation.resumeWithException(error)
+                                            }
+                                        }
+                                    } finally {
+                                        if (continuation.isCompleted) {
+                                            webView.destroy()
+                                        }
                                     }
-                                } catch (error: Throwable) {
-                                    if (!continuation.isCompleted) {
-                                        continuation.resumeWithException(error)
-                                    }
-                                } finally {
-                                    webView.destroy()
                                 }
-                            }
-                        }, 1500)
+                            }, fallbackDelayMs)
+                        }
+
+                        evaluateOnce(1500, true)
                     }
                 }
 
@@ -70,15 +112,29 @@ object XImageScraper {
         }
     }
 
-    private fun parseJsonArray(raw: String): List<String> {
-        val json = JSONArray(raw)
-        return buildList(json.length()) {
-            for (index in 0 until json.length()) {
-                val url = json.optString(index)
+    private fun parseJsonResult(raw: String): XWebScrapeResult {
+        if (raw.isBlank() || raw == "null") {
+            return XWebScrapeResult(emptyList(), null)
+        }
+        val cleaned = if (raw.startsWith("\"") && raw.endsWith("\"")) {
+            raw.substring(1, raw.length - 1).replace("\\\\", "\\").replace("\\\"", "\"")
+        } else {
+            raw
+        }
+        val json = JSONObject(cleaned)
+        val imagesArray = json.optJSONArray("images") ?: JSONArray()
+        val images = buildList(imagesArray.length()) {
+            for (index in 0 until imagesArray.length()) {
+                val url = imagesArray.optString(index)
                 if (url.isNotBlank()) {
                     add(url)
                 }
             }
         }
+        val canonical = json.optString("canonical")
+            .ifBlank { json.optString("ogUrl") }
+            .ifBlank { json.optString("locationUrl") }
+            .ifBlank { null }
+        return XWebScrapeResult(images, canonical)
     }
 }

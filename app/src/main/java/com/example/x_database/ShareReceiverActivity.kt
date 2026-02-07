@@ -13,6 +13,8 @@ import com.example.x_database.data.BookmarkRepository
 import com.example.x_database.util.SaveFailureLogger
 import com.example.x_database.util.extractTweetId
 import com.example.x_database.util.tweetIdToPostedAt
+import com.example.x_database.web.XAuthorResolver
+import com.example.x_database.web.XUrlResolver
 import com.example.x_database.web.XApiExtractor
 import com.example.x_database.web.XImageFallbackExtractor
 import com.example.x_database.web.XImageScraper
@@ -106,6 +108,16 @@ class ShareReceiverActivity : ComponentActivity() {
         val tweetId = extractTweetId(tweetUrl)
         val postedAt = tweetId?.let(::tweetIdToPostedAt)
         val debug = mutableListOf<String>()
+        var authorUsername: String? = null
+
+        if (tweetId != null) {
+            authorUsername = XAuthorResolver.resolveFromTweetId(tweetId)
+        }
+
+        // A) Try canonical URL via HTTP (works when i/status expands).
+        if (authorUsername.isNullOrBlank()) {
+            authorUsername = XUrlResolver.resolveUsernameFromCanonical(tweetUrl)
+        }
 
         val apiUrls = if (tweetId != null) {
             val apiMedia = XApiExtractor.extractMedia(tweetId)
@@ -128,14 +140,22 @@ class ShareReceiverActivity : ComponentActivity() {
             emptyList()
         }
 
-        val webViewUrls = if (apiUrls.isEmpty() && fallbackUrls.isEmpty()) {
+        val webViewResult = if (authorUsername.isNullOrBlank() || (apiUrls.isEmpty() && fallbackUrls.isEmpty())) {
             runCatching {
                 withTimeout(6_000) {
-                    XImageScraper.extractImageUrls(this@ShareReceiverActivity, tweetUrl)
+                    XImageScraper.extract(this@ShareReceiverActivity, tweetUrl)
                 }
-            }.getOrDefault(emptyList()).also {
-                debug += "webViewCount=${it.size}"
-            }
+            }.getOrNull()
+        } else {
+            null
+        }
+        if (authorUsername.isNullOrBlank() && !webViewResult?.canonicalUrl.isNullOrBlank()) {
+            authorUsername = XUrlResolver.resolveUsernameFromCanonical(webViewResult!!.canonicalUrl!!)
+        }
+        val webViewUrls = if (apiUrls.isEmpty() && fallbackUrls.isEmpty()) {
+            val urls = webViewResult?.imageUrls.orEmpty()
+            debug += "webViewCount=${urls.size}"
+            urls
         } else {
             emptyList()
         }
@@ -161,7 +181,8 @@ class ShareReceiverActivity : ComponentActivity() {
                     imageUrl = imageUrl,
                     sourceUrl = tweetUrl,
                     tweetId = tweetId,
-                    postedAt = postedAt
+                    postedAt = postedAt,
+                    authorUsername = authorUsername
                 )
             }
         }

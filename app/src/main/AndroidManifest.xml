@@ -47,6 +47,30 @@
                 <data android:mimeType="image/*" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".WebViewDebugActivity"
+            android:exported="false"
+            android:label="WebView Debug"
+            android:theme="@style/Theme.Xdatabase" />
+
+        <activity
+            android:name=".AuthorListActivity"
+            android:exported="false"
+            android:label="Authors"
+            android:theme="@style/Theme.Xdatabase" />
+
+        <activity
+            android:name=".AuthorGalleryActivity"
+            android:exported="false"
+            android:label="Author Gallery"
+            android:theme="@style/Theme.Xdatabase" />
+
+        <activity
+            android:name=".XLoginActivity"
+            android:exported="false"
+            android:label="X Login"
+            android:theme="@style/Theme.Xdatabase" />
     </application>
 
 </manifest>
