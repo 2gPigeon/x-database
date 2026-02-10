@@ -78,6 +78,7 @@ class MainActivity : ComponentActivity() {
         )
         MainViewModelFactory(repository)
     }
+    private var loginLaunched = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -91,6 +92,21 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        if (!isXLoggedIn() && !loginLaunched) {
+            loginLaunched = true
+            startActivity(Intent(this, XLoginActivity::class.java))
+        }
+    }
+
+    private fun isXLoggedIn(): Boolean {
+        val cookieManager = CookieManager.getInstance()
+        val xCookie = cookieManager.getCookie("https://x.com")
+        val twitterCookie = cookieManager.getCookie("https://twitter.com")
+        return !xCookie.isNullOrBlank() || !twitterCookie.isNullOrBlank()
     }
 }
 
@@ -116,14 +132,7 @@ private fun BookmarkGallery(
                     }
                 },
                 actions = {
-                    IconButton(onClick = {
-                        val cookieManager = CookieManager.getInstance()
-                        if (!cookieManager.hasCookies()) {
-                            context.startActivity(Intent(context, XLoginActivity::class.java))
-                        } else {
-                            onSync(context)
-                        }
-                    }) {
+                    IconButton(onClick = { onSync(context) }) {
                         Icon(imageVector = Icons.Default.Refresh, contentDescription = "Sync")
                     }
                 }
