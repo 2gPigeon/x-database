@@ -23,7 +23,11 @@ data class XWebScrapeResult(
 
 object XImageScraper {
     @SuppressLint("SetJavaScriptEnabled")
-    suspend fun extract(context: Context, tweetUrl: String): XWebScrapeResult {
+    suspend fun extract(
+        context: Context,
+        tweetUrl: String,
+        maxWaitMs: Long = 6000L
+    ): XWebScrapeResult {
         return withContext(Dispatchers.Main) {
             suspendCancellableCoroutine { continuation ->
                 val webView = WebView(context)
@@ -70,25 +74,31 @@ object XImageScraper {
                         """.trimIndent()
 
                         val handler = Handler(Looper.getMainLooper())
-                        fun evaluateOnce(fallbackDelayMs: Long, allowRetry: Boolean) {
+                        val startTime = System.currentTimeMillis()
+                        val maxWaitMsLocal = maxWaitMs
+
+                        fun shouldAccept(canonical: String?): Boolean {
+                            if (canonical.isNullOrBlank()) return false
+                            return !canonical.contains("/i/status/")
+                        }
+
+                        fun evaluateLoop(delayMs: Long) {
                             handler.postDelayed({
                                 webView.evaluateJavascript(script) { result ->
                                     try {
                                         val parsed = parseJsonResult(result)
+                                        val canonical = parsed.canonicalUrl
                                         if (!continuation.isCompleted) {
-                                            if (parsed.canonicalUrl.isNullOrBlank() && allowRetry) {
-                                                evaluateOnce(2000, false)
-                                            } else {
+                                            val elapsed = System.currentTimeMillis() - startTime
+                                            if (shouldAccept(canonical) || elapsed >= maxWaitMsLocal) {
                                                 continuation.resume(parsed)
+                                            } else {
+                                                evaluateLoop(1500)
                                             }
                                         }
                                     } catch (error: Throwable) {
                                         if (!continuation.isCompleted) {
-                                            if (allowRetry) {
-                                                evaluateOnce(2000, false)
-                                            } else {
-                                                continuation.resumeWithException(error)
-                                            }
+                                            continuation.resumeWithException(error)
                                         }
                                     } finally {
                                         if (continuation.isCompleted) {
@@ -96,10 +106,10 @@ object XImageScraper {
                                         }
                                     }
                                 }
-                            }, fallbackDelayMs)
+                            }, delayMs)
                         }
 
-                        evaluateOnce(1500, true)
+                        evaluateLoop(1500)
                     }
                 }
 

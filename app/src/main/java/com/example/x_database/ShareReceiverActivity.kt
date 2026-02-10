@@ -13,11 +13,11 @@ import com.example.x_database.data.BookmarkRepository
 import com.example.x_database.util.SaveFailureLogger
 import com.example.x_database.util.extractTweetId
 import com.example.x_database.util.tweetIdToPostedAt
-import com.example.x_database.web.XAuthorResolver
-import com.example.x_database.web.XUrlResolver
 import com.example.x_database.web.XApiExtractor
+import com.example.x_database.web.XAuthorResolver
 import com.example.x_database.web.XImageFallbackExtractor
 import com.example.x_database.web.XImageScraper
+import com.example.x_database.web.XUrlResolver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.SupervisorJob
@@ -45,6 +45,12 @@ class ShareReceiverActivity : ComponentActivity() {
         )
 
         val incomingIntent = intent
+        if (!ShareSaveGate.tryAcquire(applicationContext)) {
+            Toast.makeText(this, "保存中のため共有をスキップしました", Toast.LENGTH_SHORT).show()
+            finish()
+            return
+        }
+
         val appContext = applicationContext
         shareScope.launch {
             processShare(appContext, incomingIntent, repository)
@@ -58,50 +64,54 @@ private suspend fun processShare(
     incomingIntent: Intent,
     repository: BookmarkRepository
 ) {
-    runCatching {
-        SaveFailureLogger.appendEvent(
-            context = context,
-            intent = incomingIntent,
-            status = "START",
-            message = "Share receiver started"
-        )
-    }
-
-    val result = runCatching {
-        withTimeout(30_000) {
-            handleShareIntent(context, repository, incomingIntent)
-        }
-    }
-    val message = if (result.isSuccess) {
+    try {
         runCatching {
             SaveFailureLogger.appendEvent(
                 context = context,
                 intent = incomingIntent,
-                status = "SUCCESS",
-                message = "Saved successfully"
+                status = "START",
+                message = "Share receiver started"
             )
         }
-        "Saved successfully"
-    } else {
-        val cause = result.exceptionOrNull() ?: IllegalStateException("unknown error")
-        runCatching {
-            SaveFailureLogger.appendEvent(
-                context = context,
-                intent = incomingIntent,
-                status = "FAIL",
-                message = cause.message ?: "unknown error",
-                extra = mapOf("errorType" to cause::class.java.simpleName)
-            )
-        }
-        val logSuffix = runCatching {
-            val logFile = SaveFailureLogger.append(context, incomingIntent, cause)
-            " (logged: ${logFile.name})"
-        }.getOrDefault(" (failed to write log)")
-        "Save failed: ${cause.message ?: "unknown error"}$logSuffix"
-    }
 
-    withContext(Dispatchers.Main) {
-        Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+        val result = runCatching {
+            withTimeout(30_000) {
+                handleShareIntent(context, repository, incomingIntent)
+            }
+        }
+        val message = if (result.isSuccess) {
+            runCatching {
+                SaveFailureLogger.appendEvent(
+                    context = context,
+                    intent = incomingIntent,
+                    status = "SUCCESS",
+                    message = "Saved successfully"
+                )
+            }
+            "Saved successfully"
+        } else {
+            val cause = result.exceptionOrNull() ?: IllegalStateException("unknown error")
+            runCatching {
+                SaveFailureLogger.appendEvent(
+                    context = context,
+                    intent = incomingIntent,
+                    status = "FAIL",
+                    message = cause.message ?: "unknown error",
+                    extra = mapOf("errorType" to cause::class.java.simpleName)
+                )
+            }
+            val logSuffix = runCatching {
+                val logFile = SaveFailureLogger.append(context, incomingIntent, cause)
+                " (logged: ${logFile.name})"
+            }.getOrDefault(" (failed to write log)")
+            "Save failed: ${cause.message ?: "unknown error"}$logSuffix"
+        }
+
+        withContext(Dispatchers.Main) {
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+        }
+    } finally {
+        ShareSaveGate.release(context)
     }
 }
 
@@ -139,7 +149,6 @@ private suspend fun handleSingleShare(
         authorUsername = XAuthorResolver.resolveFromTweetId(tweetId)
     }
 
-    // A) Try canonical URL via HTTP (works when i/status expands).
     if (authorUsername.isNullOrBlank()) {
         authorUsername = XUrlResolver.resolveUsernameFromCanonical(tweetUrl)
     }
@@ -168,7 +177,7 @@ private suspend fun handleSingleShare(
     val webViewResult = if (authorUsername.isNullOrBlank() || (apiUrls.isEmpty() && fallbackUrls.isEmpty())) {
         runCatching {
             withTimeout(6_000) {
-                XImageScraper.extract(context, tweetUrl)
+                XImageScraper.extract(context, tweetUrl, maxWaitMs = 3000L)
             }
         }.getOrNull()
     } else {

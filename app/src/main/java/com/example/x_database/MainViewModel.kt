@@ -98,13 +98,16 @@ class MainViewModel(
                 val result = XImageScraper.extract(context, url)
                 result.canonicalUrl
             }.getOrNull()?.takeIf { it.isNotBlank() }
-            if (!canonical.isNullOrBlank()) {
+            val isExpanded = !canonical.isNullOrBlank() &&
+                !canonical.contains("/i/status/") &&
+                !XUrlResolver.extractUsernameFromUrl(canonical).isNullOrBlank()
+            if (isExpanded) {
                 runCatching {
                     SaveFailureLogger.appendEvent(
                         context = context,
                         intent = android.content.Intent("URL_EXPAND"),
                         status = "URL_EXPAND_OK",
-                        message = canonical,
+                        message = canonical ?: "",
                         extra = mapOf("url" to url)
                     )
                 }
@@ -115,12 +118,12 @@ class MainViewModel(
                         intent = android.content.Intent("URL_EXPAND"),
                         status = "URL_EXPAND_FAIL",
                         message = "Unresolved",
-                        extra = mapOf("url" to url)
+                        extra = mapOf("url" to url, "canonical" to (canonical ?: ""))
                     )
                 }
             }
             delay(300)
-            canonical
+            if (isExpanded) canonical else null
         }
     }
 }

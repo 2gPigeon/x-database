@@ -186,12 +186,20 @@ class BookmarkRepository(
     }
 
     suspend fun refreshAuthorsFromSourceUrls() = withContext(Dispatchers.IO) {
-        val all = dao.findAll()
-        all.forEach { bookmark ->
+        val targets = dao.findUnknownAuthors()
+        targets.forEach { bookmark ->
             val url = bookmark.sourceUrl ?: return@forEach
             val username = com.example.x_database.web.XUrlResolver.extractUsernameFromUrl(url)
-            if (!username.isNullOrBlank() && !username.equals("unknown", ignoreCase = true) && username != bookmark.authorUsername) {
+            if (!username.isNullOrBlank() && !username.equals("unknown", ignoreCase = true)) {
                 dao.updateAuthorUsername(bookmark.id, username)
+                return@forEach
+            }
+
+            if (bookmark.tweetId != null) {
+                val resolved = com.example.x_database.web.XAuthorResolver.resolveFromTweetId(bookmark.tweetId)
+                if (!resolved.isNullOrBlank() && !resolved.equals("unknown", ignoreCase = true)) {
+                    dao.updateAuthorUsername(bookmark.id, resolved)
+                }
             }
         }
     }

@@ -33,7 +33,8 @@ interface BookmarkDao {
     @Query(
         "SELECT * FROM bookmarks " +
             "WHERE (sourceUrl LIKE '%/i/status/%' OR sourceUrl IS NULL) " +
-            "AND tweetId IS NOT NULL"
+            "AND tweetId IS NOT NULL " +
+            "AND (authorUsername IS NULL OR authorUsername = '' OR lower(authorUsername) = 'unknown')"
     )
     suspend fun findUnexpandedSourceUrls(): List<Bookmark>
 
