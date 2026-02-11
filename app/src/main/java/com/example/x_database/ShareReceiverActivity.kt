@@ -153,18 +153,17 @@ private suspend fun handleSingleShare(
         authorUsername = XUrlResolver.resolveUsernameFromCanonical(tweetUrl)
     }
 
-    val apiUrls = if (tweetId != null) {
+    val apiResult = if (tweetId != null) {
         val apiMedia = XApiExtractor.extractMedia(tweetId)
         debug += "apiPhotoCount=${apiMedia.photoUrls.size}"
-        debug += "apiHasVideo=${apiMedia.hasVideo}"
-        if (apiMedia.photoUrls.isEmpty() && apiMedia.hasVideo) {
-            error("This post has video/GIF but no photos. ${debug.joinToString(", ")}")
-        }
-        apiMedia.photoUrls
+        debug += "apiVideoCount=${apiMedia.videoUrls.size}"
+        apiMedia
     } else {
         debug += "tweetIdMissing=true"
-        emptyList()
+        com.example.x_database.web.XApiMediaResult(emptyList(), emptyList())
     }
+    val apiUrls = apiResult.photoUrls
+    val apiVideoUrls = apiResult.videoUrls
 
     val fallbackUrls = if (apiUrls.isEmpty()) {
         XImageFallbackExtractor.extract(tweetUrl, sharedText).also {
@@ -174,7 +173,7 @@ private suspend fun handleSingleShare(
         emptyList()
     }
 
-    val webViewResult = if (authorUsername.isNullOrBlank() || (apiUrls.isEmpty() && fallbackUrls.isEmpty())) {
+    val webViewResult = if (authorUsername.isNullOrBlank() || (apiUrls.isEmpty() && fallbackUrls.isEmpty() && apiVideoUrls.isEmpty())) {
         runCatching {
             withTimeout(6_000) {
                 XImageScraper.extract(context, tweetUrl, maxWaitMs = 3000L)
@@ -186,7 +185,7 @@ private suspend fun handleSingleShare(
     if (authorUsername.isNullOrBlank() && !webViewResult?.canonicalUrl.isNullOrBlank()) {
         authorUsername = XUrlResolver.resolveUsernameFromCanonical(webViewResult!!.canonicalUrl!!)
     }
-    val webViewUrls = if (apiUrls.isEmpty() && fallbackUrls.isEmpty()) {
+    val webViewUrls = if (apiUrls.isEmpty() && fallbackUrls.isEmpty() && apiVideoUrls.isEmpty()) {
         val urls = webViewResult?.imageUrls.orEmpty()
         debug += "webViewCount=${urls.size}"
         urls
@@ -194,7 +193,7 @@ private suspend fun handleSingleShare(
         emptyList()
     }
 
-    val imageUrls = (apiUrls + fallbackUrls + webViewUrls).distinct()
+    val imageUrls = (apiUrls + fallbackUrls + webViewUrls + apiVideoUrls).distinct()
 
     if (imageUrls.isEmpty()) {
         runCatching {
@@ -211,13 +210,20 @@ private suspend fun handleSingleShare(
 
     withContext(Dispatchers.IO) {
         imageUrls.distinct().forEach { imageUrl ->
-            repository.downloadAndSaveImage(
-                imageUrl = imageUrl,
-                sourceUrl = tweetUrl,
-                tweetId = tweetId,
-                postedAt = postedAt,
-                authorUsername = authorUsername
-            )
+            val result = runCatching {
+                withTimeout(30_000) {
+                    repository.downloadAndSaveImage(
+                        imageUrl = imageUrl,
+                        sourceUrl = tweetUrl,
+                        tweetId = tweetId,
+                        postedAt = postedAt,
+                        authorUsername = authorUsername
+                    )
+                }
+            }
+            if (result.isFailure) {
+                throw result.exceptionOrNull() ?: IllegalStateException("download failed")
+            }
         }
     }
 }

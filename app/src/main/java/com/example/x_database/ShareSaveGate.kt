@@ -22,4 +22,8 @@ object ShareSaveGate {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         prefs.edit().putBoolean(KEY_SAVING, false).apply()
     }
+
+    fun reset(context: Context) {
+        release(context)
+    }
 }

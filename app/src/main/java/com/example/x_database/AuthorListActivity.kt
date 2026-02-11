@@ -50,7 +50,9 @@ import coil.compose.AsyncImage
 import com.example.x_database.data.AppDatabase
 import com.example.x_database.data.Bookmark
 import com.example.x_database.data.BookmarkRepository
+import com.example.x_database.ui.VideoThumbnail
 import com.example.x_database.ui.theme.XdatabaseTheme
+import com.example.x_database.util.isVideoFile
 import java.io.File
 
 class AuthorListActivity : ComponentActivity() {
@@ -154,11 +156,19 @@ private fun AuthorListScreen(bookmarks: List<Bookmark>) {
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     group.previews.forEach { bookmark ->
-                                        AsyncImage(
-                                            model = File(bookmark.filePath),
-                                            contentDescription = bookmark.sourceUrl ?: "preview",
-                                            modifier = Modifier.size(124.dp)
-                                        )
+                                        val filePath = bookmark.filePath
+                                        if (isVideoFile(filePath)) {
+                                            VideoThumbnail(
+                                                filePath = filePath,
+                                                modifier = Modifier.size(124.dp)
+                                            )
+                                        } else {
+                                            AsyncImage(
+                                                model = File(filePath),
+                                                contentDescription = bookmark.sourceUrl ?: "preview",
+                                                modifier = Modifier.size(124.dp)
+                                            )
+                                        }
                                     }
                                     if (group.previews.isEmpty()) {
                                         Spacer(modifier = Modifier.height(124.dp))

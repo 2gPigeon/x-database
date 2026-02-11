@@ -60,7 +60,10 @@ import coil.compose.AsyncImage
 import com.example.x_database.data.AppDatabase
 import com.example.x_database.data.Bookmark
 import com.example.x_database.data.BookmarkRepository
+import com.example.x_database.ui.VideoPlayer
+import com.example.x_database.ui.VideoThumbnail
 import com.example.x_database.ui.theme.XdatabaseTheme
+import com.example.x_database.util.isVideoFile
 import java.io.File
 
 class AuthorGalleryActivity : ComponentActivity() {
@@ -164,12 +167,20 @@ private fun AuthorGalleryScreen(author: String, bookmarks: List<Bookmark>) {
                                     containerColor = MaterialTheme.colorScheme.surfaceVariant
                                 )
                             ) {
-                                AsyncImage(
-                                    model = File(bookmark.filePath),
-                                    contentDescription = bookmark.sourceUrl ?: "saved image",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
+                                val filePath = bookmark.filePath
+                                if (isVideoFile(filePath)) {
+                                    VideoThumbnail(
+                                        filePath = filePath,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                } else {
+                                    AsyncImage(
+                                        model = File(filePath),
+                                        contentDescription = bookmark.sourceUrl ?: "saved image",
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                }
                             }
                         }
                     }
@@ -270,12 +281,20 @@ private fun AuthorPagerDialog(
                         .padding(bottom = 80.dp)
                 ) { page ->
                     val bookmark = bookmarks[page]
-                    AsyncImage(
-                        model = File(bookmark.filePath),
-                        contentDescription = bookmark.sourceUrl ?: "saved image",
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxSize()
-                    )
+                    val filePath = bookmark.filePath
+                    if (isVideoFile(filePath)) {
+                        VideoPlayer(
+                            filePath = filePath,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        AsyncImage(
+                            model = File(filePath),
+                            contentDescription = bookmark.sourceUrl ?: "saved image",
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
                 }
             }
             Row(
