@@ -14,11 +14,17 @@ import java.io.File
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 
 class BookmarkRepository(
     private val context: Context,
     private val dao: BookmarkDao,
-    private val httpClient: OkHttpClient = OkHttpClient()
+    private val httpClient: OkHttpClient = OkHttpClient.Builder()
+        .callTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
+        .build()
 ) {
     fun observeBookmarks(): Flow<List<Bookmark>> = dao.observeAll()
 

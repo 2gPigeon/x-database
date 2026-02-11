@@ -35,6 +35,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -67,7 +68,10 @@ import coil.compose.AsyncImage
 import com.example.x_database.data.AppDatabase
 import com.example.x_database.data.Bookmark
 import com.example.x_database.data.BookmarkRepository
+import com.example.x_database.ui.VideoPlayer
+import com.example.x_database.ui.VideoThumbnail
 import com.example.x_database.ui.theme.XdatabaseTheme
+import com.example.x_database.util.isVideoFile
 import java.io.File
 
 class MainActivity : ComponentActivity() {
@@ -134,6 +138,11 @@ private fun BookmarkGallery(
                 actions = {
                     IconButton(onClick = { onSync(context) }) {
                         Icon(imageVector = Icons.Default.Refresh, contentDescription = "Sync")
+                    }
+                    IconButton(onClick = {
+                        ShareSaveGate.reset(context)
+                    }) {
+                        Icon(imageVector = Icons.Default.Close, contentDescription = "Reset Save Lock")
                     }
                 }
             )
@@ -271,12 +280,20 @@ private fun ImageCard(bookmark: Bookmark, onClick: () -> Unit) {
             containerColor = MaterialTheme.colorScheme.surfaceVariant
         )
     ) {
-        AsyncImage(
-            model = File(bookmark.filePath),
-            contentDescription = bookmark.sourceUrl ?: "saved image",
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop
-        )
+        val filePath = bookmark.filePath
+        if (isVideoFile(filePath)) {
+            VideoThumbnail(
+                filePath = filePath,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            AsyncImage(
+                model = File(filePath),
+                contentDescription = bookmark.sourceUrl ?: "saved image",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        }
     }
 }
 
@@ -388,26 +405,34 @@ private fun ZoomableImagePage(bookmark: Bookmark) {
         }
     }
 
-    AsyncImage(
-        model = File(bookmark.filePath),
-        contentDescription = bookmark.sourceUrl ?: "saved image",
-        contentScale = ContentScale.Fit,
-        modifier = Modifier
-            .fillMaxSize()
-            .then(
-                if (scale > 1f) {
-                    Modifier.transformable(state = transformState)
-                } else {
-                    Modifier
-                }
-            )
-            .graphicsLayer(
-                scaleX = scale,
-                scaleY = scale,
-                translationX = offset.x,
-                translationY = offset.y
-            )
-    )
+    val filePath = bookmark.filePath
+    if (isVideoFile(filePath)) {
+        VideoPlayer(
+            filePath = filePath,
+            modifier = Modifier.fillMaxSize()
+        )
+    } else {
+        AsyncImage(
+            model = File(filePath),
+            contentDescription = bookmark.sourceUrl ?: "saved image",
+            contentScale = ContentScale.Fit,
+            modifier = Modifier
+                .fillMaxSize()
+                .then(
+                    if (scale > 1f) {
+                        Modifier.transformable(state = transformState)
+                    } else {
+                        Modifier
+                    }
+                )
+                .graphicsLayer(
+                    scaleX = scale,
+                    scaleY = scale,
+                    translationX = offset.x,
+                    translationY = offset.y
+                )
+        )
+    }
 }
 
 private fun resolveTweetUrl(bookmark: Bookmark): String? {
