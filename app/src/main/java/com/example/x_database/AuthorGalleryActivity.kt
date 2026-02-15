@@ -30,14 +30,18 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -45,12 +49,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -65,6 +71,7 @@ import com.example.x_database.ui.VideoThumbnail
 import com.example.x_database.ui.theme.XdatabaseTheme
 import com.example.x_database.util.isVideoFile
 import java.io.File
+import kotlinx.coroutines.launch
 
 class AuthorGalleryActivity : ComponentActivity() {
     private val repository by lazy {
@@ -86,7 +93,8 @@ class AuthorGalleryActivity : ComponentActivity() {
                     .sortedByDescending { it.savedAt }
                 AuthorGalleryScreen(
                     author = author,
-                    bookmarks = filtered
+                    bookmarks = filtered,
+                    repository = repository
                 )
             }
         }
@@ -99,15 +107,30 @@ class AuthorGalleryActivity : ComponentActivity() {
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
-private fun AuthorGalleryScreen(author: String, bookmarks: List<Bookmark>) {
+private fun AuthorGalleryScreen(
+    author: String,
+    bookmarks: List<Bookmark>,
+    repository: BookmarkRepository
+) {
     var expandedIndex by remember { mutableStateOf<Int?>(null) }
     val context = LocalContext.current
     var drawerOpen by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(author) },
+                title = {
+                    Text(
+                        text = author,
+                        modifier = Modifier.clickable {
+                            if (author.isNotBlank() && author != "Unknown") {
+                                val url = "https://x.com/$author"
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                            }
+                        }
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = { drawerOpen = !drawerOpen }) {
                         Icon(imageVector = Icons.Default.Menu, contentDescription = "Menu")
@@ -248,7 +271,12 @@ private fun AuthorGalleryScreen(author: String, bookmarks: List<Bookmark>) {
         AuthorPagerDialog(
             bookmarks = bookmarks,
             initialIndex = index,
-            onDismiss = { expandedIndex = null }
+            onDismiss = { expandedIndex = null },
+            onDeleteBookmark = { bookmark ->
+                scope.launch {
+                    repository.deleteBookmark(bookmark)
+                }
+            }
         )
     }
 }
@@ -257,7 +285,8 @@ private fun AuthorGalleryScreen(author: String, bookmarks: List<Bookmark>) {
 private fun AuthorPagerDialog(
     bookmarks: List<Bookmark>,
     initialIndex: Int,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onDeleteBookmark: (Bookmark) -> Unit
 ) {
     Dialog(
         onDismissRequest = onDismiss,
@@ -268,6 +297,7 @@ private fun AuthorPagerDialog(
             initialPage = initialIndex.coerceIn(0, (bookmarks.size - 1).coerceAtLeast(0)),
             pageCount = { bookmarks.size }
         )
+        var pendingPage by remember { mutableStateOf<Int?>(null) }
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -306,25 +336,80 @@ private fun AuthorPagerDialog(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                val total = bookmarks.size
-                val currentIndex = pagerState.currentPage.coerceIn(0, (total - 1).coerceAtLeast(0))
-                val currentBookmark = bookmarks.getOrNull(currentIndex)
-                Button(
-                    onClick = {
-                        val url = currentBookmark?.let(::resolveTweetUrl) ?: return@Button
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                    },
-                    enabled = currentBookmark?.let(::resolveTweetUrl) != null
+                Surface(
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                    tonalElevation = 4.dp,
+                    shadowElevation = 6.dp,
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(text = "Open X")
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val total = bookmarks.size
+                        val currentIndex = pagerState.currentPage.coerceIn(0, (total - 1).coerceAtLeast(0))
+                        val currentBookmark = bookmarks.getOrNull(currentIndex)
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            FilledTonalButton(
+                                onClick = {
+                                    if (total == 0) return@FilledTonalButton
+                                    val target = if (currentIndex >= bookmarks.lastIndex) {
+                                        (currentIndex - 1).coerceAtLeast(0)
+                                    } else {
+                                        currentIndex
+                                    }
+                                    onDeleteBookmark(bookmarks[currentIndex])
+                                    if (bookmarks.size <= 1) {
+                                        onDismiss()
+                                    } else {
+                                        pendingPage = target
+                                    }
+                                },
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                                    contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Delete"
+                                )
+                            }
+                            Button(
+                                onClick = {
+                                    val url = currentBookmark?.let(::resolveTweetUrl) ?: return@Button
+                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                                },
+                                enabled = currentBookmark?.let(::resolveTweetUrl) != null,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                    contentColor = MaterialTheme.colorScheme.onPrimary
+                                )
+                            ) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_x_logo),
+                                    contentDescription = "Open X"
+                                )
+                            }
+                        }
+                    }
                 }
-                Button(onClick = onDismiss) {
-                    Text(text = "Close")
+            }
+        }
+
+        pendingPage?.let { target ->
+            LaunchedEffect(target, bookmarks.size) {
+                if (bookmarks.isNotEmpty()) {
+                    pagerState.scrollToPage(target.coerceIn(0, bookmarks.lastIndex))
                 }
-                Text(
-                    text = if (total == 0) "0/0" else "${currentIndex + 1}/$total",
-                    color = Color.White
-                )
+                pendingPage = null
             }
         }
     }

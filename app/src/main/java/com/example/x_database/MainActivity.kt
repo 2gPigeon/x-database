@@ -33,17 +33,23 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -59,6 +65,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -123,7 +130,14 @@ private fun BookmarkGallery(
 ) {
     var expandedIndex by remember { mutableStateOf<Int?>(null) }
     val context = LocalContext.current
-    val authorFiltered = bookmarks
+    var filterMode by remember { mutableStateOf(FilterMode.ALL) }
+    val authorFiltered = bookmarks.filter { bookmark ->
+        when (filterMode) {
+            FilterMode.ALL -> true
+            FilterMode.IMAGES -> !isVideoFile(bookmark.filePath)
+            FilterMode.VIDEOS -> isVideoFile(bookmark.filePath)
+        }
+    }
     var drawerOpen by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -165,6 +179,23 @@ private fun BookmarkGallery(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        label = "All",
+                        selected = filterMode == FilterMode.ALL,
+                        onClick = { filterMode = FilterMode.ALL }
+                    )
+                    FilterChip(
+                        label = "Images",
+                        selected = filterMode == FilterMode.IMAGES,
+                        onClick = { filterMode = FilterMode.IMAGES }
+                    )
+                    FilterChip(
+                        label = "Videos",
+                        selected = filterMode == FilterMode.VIDEOS,
+                        onClick = { filterMode = FilterMode.VIDEOS }
+                    )
+                }
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
@@ -340,43 +371,92 @@ private fun ZoomablePagerDialog(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                val total = bookmarks.size
-                val currentIndex = pagerState.currentPage.coerceIn(0, (total - 1).coerceAtLeast(0))
-                val currentBookmark = bookmarks.getOrNull(currentIndex)
-                Button(
-                    onClick = {
-                        if (total == 0) return@Button
-                        val target = if (currentIndex >= bookmarks.lastIndex) {
-                            (currentIndex - 1).coerceAtLeast(0)
-                        } else {
-                            currentIndex
-                        }
-                        onDeleteBookmark(bookmarks[currentIndex])
-                        if (bookmarks.size <= 1) {
-                            onDismiss()
-                        } else {
-                            pendingPage = target
+                Surface(
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                    tonalElevation = 4.dp,
+                    shadowElevation = 6.dp,
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val total = bookmarks.size
+                        val currentIndex = pagerState.currentPage.coerceIn(0, (total - 1).coerceAtLeast(0))
+                        val currentBookmark = bookmarks.getOrNull(currentIndex)
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            FilledTonalButton(
+                                onClick = {
+                                    if (total == 0) return@FilledTonalButton
+                                    val target = if (currentIndex >= bookmarks.lastIndex) {
+                                        (currentIndex - 1).coerceAtLeast(0)
+                                    } else {
+                                        currentIndex
+                                    }
+                                    onDeleteBookmark(bookmarks[currentIndex])
+                                    if (bookmarks.size <= 1) {
+                                        onDismiss()
+                                    } else {
+                                        pendingPage = target
+                                    }
+                                },
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                                    contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Delete"
+                                )
+                            }
+                            Button(
+                                onClick = {
+                                    val url = currentBookmark?.let(::resolveTweetUrl) ?: return@Button
+                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                                },
+                                enabled = currentBookmark?.let(::resolveTweetUrl) != null,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                    contentColor = MaterialTheme.colorScheme.onPrimary
+                                )
+                            ) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_x_logo),
+                                    contentDescription = "Open X"
+                                )
+                            }
+                            val currentAuthor = currentBookmark?.authorUsername
+                                ?.takeIf { it.isNotBlank() && !it.equals("unknown", ignoreCase = true) }
+                            FilledTonalButton(
+                                onClick = {
+                                    val author = currentAuthor ?: return@FilledTonalButton
+                                    val intent = Intent(context, AuthorGalleryActivity::class.java)
+                                    intent.putExtra(AuthorGalleryActivity.EXTRA_AUTHOR, author)
+                                    context.startActivity(intent)
+                                },
+                                enabled = currentAuthor != null,
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    contentColor = MaterialTheme.colorScheme.onSurface
+                                )
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = "Same author",
+                                    tint = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
                         }
                     }
-                ) {
-                    Text(text = "Delete")
                 }
-                Button(
-                    onClick = {
-                        val url = currentBookmark?.let(::resolveTweetUrl) ?: return@Button
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                    },
-                    enabled = currentBookmark?.let(::resolveTweetUrl) != null
-                ) {
-                    Text(text = "Open X")
-                }
-                Button(onClick = onDismiss) {
-                    Text(text = "Close")
-                }
-                Text(
-                    text = if (total == 0) "0/0" else "${currentIndex + 1}/$total",
-                    color = Color.White
-                )
             }
         }
 
@@ -460,4 +540,29 @@ private fun DrawerItem(label: String, selected: Boolean, onClick: () -> Unit) {
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 10.dp)
     )
+}
+
+private enum class FilterMode {
+    ALL,
+    IMAGES,
+    VIDEOS
+}
+
+@Composable
+private fun FilterChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .background(
+                color = if (selected) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant,
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp)
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
 }
