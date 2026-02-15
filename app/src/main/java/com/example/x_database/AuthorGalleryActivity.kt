@@ -121,15 +121,22 @@ private fun AuthorGalleryScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        text = author,
-                        modifier = Modifier.clickable {
-                            if (author.isNotBlank() && author != "Unknown") {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier
+                            .clickable(enabled = author.isNotBlank() && author != "Unknown") {
                                 val url = "https://x.com/$author"
                                 context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
                             }
-                        }
-                    )
+                    ) {
+                        Text(text = author)
+                        Icon(
+                            painter = painterResource(id = R.drawable.x_logo),
+                            contentDescription = "Open X",
+                            tint = Color.Unspecified
+                        )
+                    }
                 },
                 navigationIcon = {
                     IconButton(onClick = { drawerOpen = !drawerOpen }) {
@@ -393,10 +400,11 @@ private fun AuthorPagerDialog(
                                     contentColor = MaterialTheme.colorScheme.onPrimary
                                 )
                             ) {
-                                Icon(
-                                    painter = painterResource(id = R.drawable.ic_x_logo),
-                                    contentDescription = "Open X"
-                                )
+                            Icon(
+                                painter = painterResource(id = R.drawable.x_logo),
+                                contentDescription = "Open X",
+                                tint = Color.Unspecified
+                            )
                             }
                         }
                     }

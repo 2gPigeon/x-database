@@ -428,10 +428,11 @@ private fun ZoomablePagerDialog(
                                     contentColor = MaterialTheme.colorScheme.onPrimary
                                 )
                             ) {
-                                Icon(
-                                    painter = painterResource(id = R.drawable.ic_x_logo),
-                                    contentDescription = "Open X"
-                                )
+                            Icon(
+                                painter = painterResource(id = R.drawable.x_logo),
+                                contentDescription = "Open X",
+                                tint = Color.Unspecified
+                            )
                             }
                             val currentAuthor = currentBookmark?.authorUsername
                                 ?.takeIf { it.isNotBlank() && !it.equals("unknown", ignoreCase = true) }
