@@ -99,7 +99,8 @@ class MainActivity : ComponentActivity() {
                 BookmarkGallery(
                     bookmarks = bookmarks.value,
                     onDeleteBookmark = viewModel::deleteBookmark,
-                    onSync = { ctx -> viewModel.syncUrlsAndAuthors(ctx) }
+                    onSync = { ctx -> viewModel.syncUrlsAndAuthors(ctx) },
+                    onLogin = { startActivity(Intent(this, XLoginActivity::class.java)) }
                 )
             }
         }
@@ -126,7 +127,8 @@ class MainActivity : ComponentActivity() {
 private fun BookmarkGallery(
     bookmarks: List<Bookmark>,
     onDeleteBookmark: (Bookmark) -> Unit,
-    onSync: (android.content.Context) -> Unit
+    onSync: (android.content.Context) -> Unit,
+    onLogin: () -> Unit
 ) {
     var expandedIndex by remember { mutableStateOf<Int?>(null) }
     val context = LocalContext.current
@@ -150,6 +152,12 @@ private fun BookmarkGallery(
                     }
                 },
                 actions = {
+                    IconButton(onClick = onLogin) {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = "Login"
+                        )
+                    }
                     IconButton(onClick = { onSync(context) }) {
                         Icon(imageVector = Icons.Default.Refresh, contentDescription = "Sync")
                     }
